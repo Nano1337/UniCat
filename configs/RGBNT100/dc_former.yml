@@ -1,12 +1,6 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
-  #PRETRAIN_CHOICE: 'self'
-  #PRETRAIN_PATH: '/home/ubuntu/jenni/ckpts/mm/rgbnt100/hpo/seed_1235/vit_rnt_fusion_av_s128x256_bs_256_lr_.008_120.pth'
-  #PRETRAIN_PATH: '/home/ubuntu/jenni/ckpts/mm/rgbnt100/hpo/seed_1236/vit_rnt_no_fusion_s128x256_bs_256_lr_.032_120.pth'
-  PRETRAIN_PATH: '/home/ubuntu/jenni/jx_vit_base_p16_224-80ecf9dd.pth'  
-  #PRETRAIN_PATH: '/home/ubuntu/jenni/ckpts/mm/rgbnt100/vit_rnt_no_fusion_cm_sim_shared_ch_cm_trip_100_seed_1234_120.pth'
-  #PRETRAIN_PATH: '/home/ubuntu/jenni/ckpts/mm/rgbnt100/vit_rnt_no_fusion_shared_ch_cm_trip_100_seed_1234_120.pth'
-  #PRETRAIN_PATH: '/home/ubuntu/jenni/ckpts/mm/rgbnt100/vit_rnt_no_fusion_reduce_50_disentangle_25_seed_1234_120.pth'
+  PRETRAIN_PATH: '/home/ubuntu/haoli/jx_vit_base_p16_224-80ecf9dd.pth' # do fine-tuning
   IF_LABELSMOOTH: 'off'
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
@@ -73,7 +67,7 @@ TEST:
   EVAL: True
   IMS_PER_BATCH: 256
   RE_RANKING: False
-  WEIGHT: '/home/ubuntu/jenni/ckpts/mm/rgbnt100/hpo/seed_1236/vit_rnt_no_fusion_s128x256_bs_256_lr_.016_120.pth'
+  WEIGHT: '/home/ubuntu/haoli/ckpts/mm/rgbnt100/hpo/seed_1236/vit_rnt_no_fusion_s128x256_bs_256_lr_.016_120.pth'
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
   AVERAGE_GAL: False
