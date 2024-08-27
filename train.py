@@ -67,7 +67,7 @@ if __name__ == '__main__':
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
     os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID
 
-    # create data, model, loss, optimizer, scheduler
+    # Prepare data loaders, model, loss function, optimizers, and scheduler
     train_loader, train_loader_normal, val_loader, num_query, num_mode, num_classes, camera_num = make_dataloader(cfg)
     model = make_model(cfg, num_mode, num_class=num_classes, camera_num=camera_num)
     loss_func, center_criterion = make_loss(cfg, num_classes=num_classes)

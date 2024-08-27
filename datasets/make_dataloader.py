@@ -119,6 +119,7 @@ def make_dataloader(cfg):
         all_train_transforms.append(n_train_transforms)
         all_val_transforms.append(n_val_transforms)
     
+    # handle multi-dataset training
     if len(datasets) > 1:
         print('MERGING')
         assert not cfg.MODEL.SIE_CAMERA and not cfg.MODEL.SIE_VIEW  # if we're merging datasets then camera/view info cannot be used during training
@@ -141,6 +142,7 @@ def make_dataloader(cfg):
         train_set_normal = ImageDataset(datasets[0].train, all_val_transforms[0])
         val_set = ImageDataset(datasets[0].query + datasets[0].gallery, all_val_transforms[0])
 
+    # handle various ways of creating contrastive triplets for training, different samplers involved
     if 'triplet' in cfg.DATALOADER.SAMPLER:
         if cfg.MODEL.DIST_TRAIN:
             print('DIST_TRAIN START')
