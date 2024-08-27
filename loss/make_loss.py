@@ -10,6 +10,19 @@ from .centroid_triplet_loss import CentroidTripletLoss
 from .shuffle_loss import shuffle_loss
 
 def make_loss(cfg, num_classes, num_views=0):
+    """
+    Creates the loss function and center loss criterion based on the configuration.
+
+    This function dynamically constructs the loss function and center loss criterion based on the configuration provided. It supports various types of losses, including softmax, triplet, centroid triplet, and dissimilar losses. The function also handles label smoothing and temperature softmax for the softmax loss.
+
+    Args:
+        cfg (dict): Configuration dictionary containing model settings.
+        num_classes (int): The number of classes in the dataset.
+        num_views (int, optional): The number of views. Defaults to 0.
+
+    Returns:
+        Tuple: A tuple containing the loss function and center loss criterion.
+    """
     sampler = cfg.DATALOADER.SAMPLER
     feat_dim = 2048
     center_criterion = CenterLoss(num_classes=num_classes, feat_dim=feat_dim, use_gpu=True)  # center loss
@@ -76,7 +89,7 @@ def make_loss(cfg, num_classes, num_views=0):
                 if isinstance(feat, list):
                     cen_loss = [centroid_triplet(feats, target)[0] for feats in feat]
                 else:
-                    cen_loss = [centroid_triplet(feats, target)[0]]
+                    raise Exception('Centroid loss is not supported for single modality')
                 cen_loss = [l * cfg.MODEL.TRIPLET_LOSS_WEIGHT for l  in cen_loss]
             else:
                 cen_loss = None

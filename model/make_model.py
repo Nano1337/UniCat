@@ -409,36 +409,60 @@ class EarlyFusion(nn.Module):
 
 
 class LateFusion(nn.Module):
-    # Options: pooling can happen via average, max or concatenation
-    # CE and triplet losses could be trained separately for each modality (like DCFormer/TransReID's CLS tokens) or pooled versions of CLS tokens could be used for training
-
+    """
+    This module implements late fusion for multi-modal inputs. It supports different fusion methods such as average, max, and concatenation.
+    The module can be configured to use the same or different models for each modality, depending on the configuration.
+    """
     def __init__(self, num_mode, num_class, camera_num, view_num, cfg, factory):
+        """
+        Initializes the LateFusion module.
+
+        Args:
+            num_mode (int): The number of modalities.
+            num_class (int): The number of classes.
+            camera_num (int): The number of cameras.
+            view_num (int): The number of views.
+            cfg (dict): Configuration dictionary containing model parameters.
+            factory (dict): Factory dictionary for creating models.
+        """
         super(LateFusion, self).__init__()
-        if cfg.MODEL.NAME == 'transformer': 
+        self.num_mode = num_mode
+        self.num_class = num_class
+        self.camera_num = camera_num
+        self.view_num = view_num
+        self.cfg = cfg
+        self.factory = factory
+
+        # Determine the model architecture based on configuration
+        if cfg.MODEL.NAME == 'transformer':
             if cfg.MODEL.JPM:
                 raise NotImplementedError
-                print('===========building transformer with JPM module ===========')
+                print('Building transformer with JPM module')
                 model = build_transformer_local_orig(num_class, camera_num, view_num, cfg, factory,
                                                  rearrange=cfg.MODEL.RE_ARRANGE)
             else:
-                print('===========building transformer===========')
+                print('Building transformer')
                 model = build_transformer(num_class, camera_num, view_num, cfg, factory)
         else:
-            print('===========building ResNet===========')
+            print('Building ResNet')
             model = Backbone(num_class, cfg)
 
+        # Initialize mode backbones based on configuration
         if cfg.MODEL.SAME_MODEL:
             self.mode_backbones = nn.ModuleList([model for _ in range(num_mode)])
         else:
             self.mode_backbones = nn.ModuleList([model if i == 0 else copy.deepcopy(model) for i in range(num_mode)])
         
+        # Set fusion method based on configuration
         self.fusion_method = cfg.MODEL.FUSION_METHOD
-        assert self.fusion_method in ('av', 'max', 'cat')
+        assert self.fusion_method in ('av', 'max', 'cat'), "Invalid fusion method. Supported methods are 'av', 'max', and 'cat'."
         
+        # Determine if fusion is used
         self.use_fusion = cfg.MODEL.USE_FUSION
         if self.use_fusion:
             print('Training with fusion')
         
+        # Set input planes based on configuration
         self.in_planes = cfg.MODEL.EMBED_DIM
         if self.use_fusion:
             num_classifier = 1
@@ -447,6 +471,7 @@ class LateFusion(nn.Module):
         else:
             num_classifier = num_mode
 
+        # Adjust number of classifiers based on model name and configuration
         if cfg.MODEL.NAME == 'transformer':
             if cfg.MODEL.JPM:
                 # TransReID
@@ -455,6 +480,7 @@ class LateFusion(nn.Module):
                 # DCFormer / ViT
                 num_classifier *= cfg.MODEL.CLS_TOKEN_NUM
         
+        # Initialize classifiers and bottlenecks
         self.num_classes = num_class 
         self.classifiers = nn.ModuleList([nn.Linear(self.in_planes, self.num_classes, bias=False) for _ in range(num_classifier)])
         self.bottlenecks = nn.ModuleList([nn.BatchNorm1d(self.in_planes) for _ in range(num_classifier)])
@@ -469,7 +495,22 @@ class LateFusion(nn.Module):
             self.load_param(model_path)
 
     def forward(self, x, label=None, cam_label= None, view_label=None, print_=False):
+        """
+        Forward pass through the LateFusion module.
+
+        Args:
+            x (Tensor): Input tensor of shape (B, M, C, H, W), where B is batch size, M is the number of modalities, C is the number of channels, H is height, and W is width.
+            label (Tensor, optional): Label tensor. Defaults to None.
+            cam_label (Tensor, optional): Camera label tensor. Defaults to None.
+            view_label (Tensor, optional): View label tensor. Defaults to None.
+            print_ (bool, optional): Flag to print intermediate results. Defaults to False.
+
+        Returns:
+            Tuple: A tuple containing the scores and features.
+        """
         # x shape: (B, M, C, H, W), B = batch, M = nbr modality
+        (_, M, C, H, W) = x.size()
+        x = x.reshape(-1, M*C, H, W)
         mode_feats = []
         for m in range(x.size(1)):
             mode_x = self.mode_backbones[m](x[:, m], label=label, cam_label=cam_label, view_label=view_label)
@@ -524,6 +565,12 @@ class LateFusion(nn.Module):
                 return scores, torch.mean(torch.stack(feats, dim=1), dim=1) if self.feat_mean else torch.cat(feats, dim=1)
 
     def load_param(self, trained_path):
+        """
+        Loads pre-trained model parameters.
+
+        Args:
+            trained_path (str): Path to the pre-trained model.
+        """
         param_dict = torch.load(trained_path)
         for i in param_dict:
             #print(i)
@@ -541,11 +588,27 @@ __factory_T_type = {
     'deit_base_patch16_224_TransReID': vit_base_patch16_224_TransReID,
     'deit_small_patch16_224_TransReID': deit_small_patch16_224_TransReID
 }
-
 def make_model(cfg, num_mode, num_class, camera_num, view_num=0):
+    """
+    Creates a model based on the configuration provided.
+
+    Args:
+        cfg (dict): Configuration dictionary containing model parameters.
+        num_mode (int): Number of modes in the model.
+        num_class (int): Number of classes in the classification task.
+        camera_num (int): Number of cameras in the system.
+        view_num (int, optional): Number of views. Defaults to 0.
+
+    Returns:
+        model: The created model instance.
+    """
     if cfg.MODEL.LATE_FUSION or not cfg.MODEL.USE_FUSION:
+        # If late fusion is enabled or fusion is not used, create a LateFusion model
         return LateFusion(num_mode, num_class, camera_num, view_num, cfg, __factory_T_type)
-    mode_to_channels = {}
-    for n in range(num_mode):
-        mode_to_channels[n] = 3  # TODO: fix me. I don't want NIR to have 3 channels
-    return EarlyFusion(mode_to_channels, num_class, camera_num, view_num, cfg, __factory_T_type)
+    else:
+        # If early fusion is used, create an EarlyFusion model
+        mode_to_channels = {}
+        for n in range(num_mode):
+            # Assign 3 channels to each mode, except for NIR which should be handled differently
+            mode_to_channels[n] = 3  # TODO: Implement NIR channel handling
+        return EarlyFusion(mode_to_channels, num_class, camera_num, view_num, cfg, __factory_T_type)

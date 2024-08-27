@@ -5,7 +5,20 @@ from .cosine_lr import CosineLRScheduler
 
 
 def create_scheduler(cfg, optimizer):
+    """
+    Creates a CosineLRScheduler based on the configuration provided.
+
+    This function initializes a CosineLRScheduler with parameters derived from the configuration. It supports different types of learning rate schedules based on the configuration.
+
+    Args:
+        cfg (dict): Configuration dictionary containing solver settings.
+        optimizer (torch.optim.Optimizer): The optimizer to which the scheduler will be applied.
+
+    Returns:
+        CosineLRScheduler: The created scheduler instance.
+    """
     num_epochs = cfg.SOLVER.MAX_EPOCHS
+    # Selecting the learning rate schedule type based on the configuration
     # type 1
     # lr_min = 0.01 * cfg.SOLVER.BASE_LR
     # warmup_lr_init = 0.001 * cfg.SOLVER.BASE_LR
@@ -19,6 +32,7 @@ def create_scheduler(cfg, optimizer):
     warmup_t = cfg.SOLVER.WARMUP_EPOCHS
     noise_range = None
 
+    # Initializing the CosineLRScheduler with the derived parameters
     lr_scheduler = CosineLRScheduler(
             optimizer,
             t_initial=num_epochs,
