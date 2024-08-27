@@ -1,18 +1,18 @@
-from utils.logger import setup_logger
-from datasets import make_dataloader
-from model import make_model
-from solver import make_optimizer
-from solver.scheduler_factory import create_scheduler
-from loss import make_loss
-from processor import do_train
-import random
 import torch
+import torch.distributed as dist
 import numpy as np
 import os
 import argparse
-# from timm.scheduler import create_scheduler
+import random
+
 from config import cfg
-import torch.distributed as dist
+from datasets import make_dataloader
+from loss import make_loss
+from model import make_model
+from processor import do_train
+from solver import make_optimizer, scheduler_factory as create_scheduler
+from utils.logger import setup_logger
+
 def set_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -25,6 +25,7 @@ def set_seed(seed):
 
 if __name__ == '__main__':
 
+    # parse input args from config file and command line
     parser = argparse.ArgumentParser(description="ReID Baseline Training")
     parser.add_argument(
         "--config_file", default="", help="path to config file", type=str
@@ -43,6 +44,7 @@ if __name__ == '__main__':
     if cfg.MODEL.DIST_TRAIN:
         torch.cuda.set_device(args.local_rank)
 
+    # setup logger
     output_dir = cfg.OUTPUT_DIR
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
@@ -60,16 +62,19 @@ if __name__ == '__main__':
     if logger:
         logger.info("Running with config:\n{}".format(cfg))
 
+    # init distributed training
     if cfg.MODEL.DIST_TRAIN:
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
     os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID
+
+    # create data, model, loss, optimizer, scheduler
     train_loader, train_loader_normal, val_loader, num_query, num_mode, num_classes, camera_num = make_dataloader(cfg)
     model = make_model(cfg, num_mode, num_class=num_classes, camera_num=camera_num)
     loss_func, center_criterion = make_loss(cfg, num_classes=num_classes)
-
     optimizer, optimizer_center = make_optimizer(cfg, model, center_criterion)
-
     scheduler = create_scheduler(cfg, optimizer)
+
+    # start training
     do_train(
         cfg,
         model,
