@@ -583,11 +583,13 @@ class LateFusion(nn.Module):
         #raise Exception
         print('Loaded pretrained model from {}'.format(trained_path))
 
+# model factory pattern
 __factory_T_type = {
     'vit_base_patch16_224_TransReID': vit_base_patch16_224_TransReID,
     'deit_base_patch16_224_TransReID': vit_base_patch16_224_TransReID,
     'deit_small_patch16_224_TransReID': deit_small_patch16_224_TransReID
 }
+
 def make_model(cfg, num_mode, num_class, camera_num, view_num=0):
     """
     Creates a model based on the configuration provided.

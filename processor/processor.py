@@ -286,6 +286,7 @@ def evaluate_model(model, logger, epoch, val_loader, device, evaluator):
     torch.cuda.empty_cache()
     
     return mAP
+
 def do_inference(cfg, model, val_loader, num_query, num_cam, num_mode, eval_mode='multi', verbose=True):
     """
     Performs inference on the validation set and computes metrics based on the specified evaluation mode.
