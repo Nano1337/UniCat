@@ -1,13 +1,14 @@
 import torch
 import copy
 import torchvision.transforms as T
-from .preprocessing import RandomGrayscalePatchReplacement
 from torch.utils.data import DataLoader
-from .bases import ImageDataset, MergedImageDataset
+import torch.distributed as dist
 from timm.data.random_erasing import RandomErasing
+
+from .preprocessing import RandomGrayscalePatchReplacement
+from .bases import ImageDataset, MergedImageDataset
 from .sampler import RandomIdentitySampler, RandomIdentityBatchSampler
 from .sampler_ddp import RandomIdentitySampler_DDP, RandomIdentityBatchSampler_DDP
-import torch.distributed as dist
 from .corrupt_res import ResCorrupter
 from .rgbn300 import RGBN300
 from .rgbnt100 import RGBNT100
@@ -15,6 +16,7 @@ from .rgbnt201 import RGBNT201
 from .flare import Flare
 from .merge_datasets import merge_datasets
 
+# Dataset factory
 __factory = {
     'rgbn300': RGBN300,
     'rgbnt100': RGBNT100,
@@ -24,7 +26,13 @@ __factory = {
 
 def train_collate_fn(batch):
     """
-    # collate_fn
+    Collate function for training data loader.
+    
+    Args:
+        batch: A list of tuples (img, pid, camid, img_path)
+    
+    Returns:
+        A tuple of tensors for (imgs, pids, camids, camid_tensor, img_paths)
     """
     imgs, pids, camids, img_paths = zip(*batch)
     pids = torch.tensor(pids, dtype=torch.int64)
@@ -32,11 +40,35 @@ def train_collate_fn(batch):
     return torch.stack(imgs, dim=0), pids, camids, camid_tensor, img_paths
 
 def val_collate_fn(batch):
+    """
+    Collate function for validation data loader.
+    
+    Args:
+        batch: A list of tuples (img, pid, camid, img_path)
+    
+    Returns:
+        A tuple of tensors for (imgs, pids, camids, camid_tensor, img_paths)
+    """
     imgs, pids, camids, img_paths = zip(*batch)
     camid_tensor = torch.tensor(camids, dtype=torch.int64)
     return torch.stack(imgs, dim=0), pids, camids, camid_tensor, img_paths
 
 def make_dataloader(cfg):
+    """
+    Create data loaders for training and validation.
+    
+    Args:
+        cfg: Configuration object containing dataset and data loader parameters
+    
+    Returns:
+        train_loader: DataLoader for training
+        train_loader_normal: DataLoader for training set with validation transforms
+        val_loader: DataLoader for validation
+        len(all_query): Number of query samples
+        num_mode: Number of modes in the dataset
+        num_classes: Total number of identity classes
+        cam_num: Total number of cameras
+    """
     if cfg.INPUT.RE_MODE == 'timm':
         re = RandomErasing(probability=cfg.INPUT.RE_PROB, mode='pixel', max_count=1, device='cpu')
     else:
@@ -50,9 +82,6 @@ def make_dataloader(cfg):
             T.ToTensor(),
             T.Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD),
             re
-            #        RandomErasing(probability=cfg.INPUT.RE_PROB, mode='pixel', max_count=1, device='cpu'),
-        #    T.RandomErasing(p=0.5, value='random')
-            # RandomErasing(probability=cfg.INPUT.RE_PROB, mean=cfg.INPUT.PIXEL_MEAN)
         ])
 
     val_transforms = T.Compose([
@@ -61,14 +90,11 @@ def make_dataloader(cfg):
         T.Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD)
     ])
 
-
     num_workers = cfg.DATALOADER.NUM_WORKERS
     
     datasets = []
     all_train_transforms = []
     all_val_transforms = []
-    train_ind_to_transform = {}
-    val_ind_to_transform = {}
     num_classes = cam_num = 0
     num_mode = None
     for n, root, res_mode in zip(cfg.DATASETS.NAMES, cfg.DATASETS.ROOT_DIR, cfg.INPUT.RES_MODE):
@@ -115,7 +141,6 @@ def make_dataloader(cfg):
         train_set_normal = ImageDataset(datasets[0].train, all_val_transforms[0])
         val_set = ImageDataset(datasets[0].query + datasets[0].gallery, all_val_transforms[0])
 
-
     if 'triplet' in cfg.DATALOADER.SAMPLER:
         if cfg.MODEL.DIST_TRAIN:
             print('DIST_TRAIN START')
@@ -153,7 +178,6 @@ def make_dataloader(cfg):
         )
     else:
         print('unsupported sampler! expected softmax or triplet but got {}'.format(cfg.SAMPLER))
-
 
     val_loader = DataLoader(
         val_set, batch_size=cfg.TEST.IMS_PER_BATCH, shuffle=False, num_workers=num_workers,
